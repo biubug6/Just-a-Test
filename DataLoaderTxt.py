@@ -30,3 +30,57 @@ class RandomIdentitySampler(data.sampler.Sampler):
                 t = np.random.choice(t, size = self.num_instances, replace = True)
             ret.extend(t)
         return iter(ret)
+   
+class TxtDataset(data.Dataset):
+    """
+    Args:
+        root (string): Root directory path.
+        txtfile (string): each line includes (indentity, cam_id, filename) in txtfile
+        transform (callable, optional)
+    """
+    def __init__(self, root, txtfile, transform = None, test = False, loader = default_loader):
+        self.root  = root
+        self.transform = transform
+        self.loader = loader
+        self.test = test
+        
+        self.infos, self.classes, self.ids, self.cams = self.readtxt(txtfile)
+        
+    def readtxt(self, txtfile):
+        """
+        return tuples that contain full image path, label, CamID
+        """
+        with open(txtfile) as file:
+            lines = file.readlines()
+            
+        infos = []
+        for line in lines:
+            infos.append( np.array(line.split()))
+            
+        IDs = np.array(infos)[:, 0]
+        CamIDs = np.array(infos)[:, 1]
+        unique_ID = np.sort(np.unique(IDs))
+        class_to_idx = {unique_ID[i]: i for i in range(len(unique_ID))}
+
+        images = []
+        for info in infos:
+            if self.test:
+                label = info[0]
+            else:
+                label = class_to_ids[info[0]]
+            fullpath = os.path.join(self.root, info[2])
+            cam = info[1]
+            item = (fullpath, label, cam)
+            images.append(item)
+        return images, unique_ID, IDs, CamIDs
+    
+    def __getitem__(self, index):
+        path, label, cam = self.infos[index]
+        img = self.loader(path)
+        if self.transform is not None:
+            img = self.transform(img)
+        return img, label, int(cam)
+    
+    def __len__(self):
+        return len(self.infos)
+                
